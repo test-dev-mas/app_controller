@@ -68,6 +68,7 @@ void remote_method_look_up(char* func_name);
 int get_status(int dut_id);
 int get_voltage(int dut_id);
 int get_resistance(int dut_id);
+int put_display(char* line);
 
 struct remote_method_row_t {
     const char* name;
@@ -77,7 +78,8 @@ struct remote_method_row_t {
 static struct remote_method_row_t remote_methods[] = {
     {"get status", get_status},
     {"get voltage", get_voltage},
-    {"get resistance", get_resistance}
+    {"get resistance", get_resistance},
+    {"put display", put_display}
 };
 
 struct DUT_t
@@ -101,18 +103,20 @@ struct DUT_t
     uint8_t led_orange_result;
 };
 
-// struct DUT DUT_1 = {1, 47, test_points[0], test_points[1], 37, 36, 43, A11, A10, 0, 0};
-// struct DUT DUT_2 = {2, 46, test_points[2], test_points[3], 35, 34, 42, A9, A8, 0, 0};
-// struct DUT DUT_3 = {3, 45, test_points[4], test_points[5], 33, 32, 41, A7, A6, 0, 0};
-// struct DUT DUT_4 = {4, 44, test_points[6], test_points[7], 31, 30, 40, A5, A4, 0, 0};
+struct DUT_t duts[] = {
+    {1, 47, test_points[0], test_points[1], 37, 36, 43, A11, A10, 0, 0},
+    {2, 46, test_points[2], test_points[3], 35, 34, 42, A9, A8, 0, 0},
+    {3, 45, test_points[4], test_points[5], 33, 32, 41, A7, A6, 0, 0},
+    {4, 44, test_points[6], test_points[7], 31, 30, 40, A5, A4, 0, 0}
+};
 
 void setup() {
-    struct DUT_t duts[] = {
-        {1, 47, test_points[0], test_points[1], 37, 36, 43, A11, A10, 0, 0},
-        {2, 46, test_points[2], test_points[3], 35, 34, 42, A9, A8, 0, 0},
-        {3, 45, test_points[4], test_points[5], 33, 32, 41, A7, A6, 0, 0},
-        {4, 44, test_points[6], test_points[7], 31, 30, 40, A5, A4, 0, 0}
-    };
+    // struct DUT_t duts[] = {
+    //     {1, 47, test_points[0], test_points[1], 37, 36, 43, A11, A10, 0, 0},
+    //     {2, 46, test_points[2], test_points[3], 35, 34, 42, A9, A8, 0, 0},
+    //     {3, 45, test_points[4], test_points[5], 33, 32, 41, A7, A6, 0, 0},
+    //     {4, 44, test_points[6], test_points[7], 31, 30, 40, A5, A4, 0, 0}
+    // };
 
     init_ict_board();
     init_system();
@@ -164,7 +168,11 @@ void setup() {
 
     touch(tft, 80, 240, 261, 301, 1000000);
     tft.fillScreen(bg);
-    tft.setCursor(0,15);
+    tft.setCursor(0,0);
+    for (auto j=0;j<1000;j++) {
+        tft.print("sudo apt");
+    }
+
 
     // for (auto i=0;i<100;i++) {
     //     RT68_ON
@@ -187,7 +195,6 @@ void setup() {
     //     Serial.println("found");
     // }
     // show_info(&DUT_1);
-    get_voltage(&duts[0]);
 
     char message[100] = {0};
     uint8_t i = 0;
@@ -197,19 +204,23 @@ void setup() {
         while (Serial.available()) {
             char u = Serial.read();
             
+            /*  a naive approach is to pass only function id
+                to look-up
+                and receive parameters inside function
+                this will result a lot of extra code for receiving though\
+                */
             if (u == '\r') {
                 // Serial.print("message received: ");
                 // Serial.println(message);
                 /* remote procedure call */
+                // might be a good idea to retain parse_message() to decode an entire message frame (func+parameter)
                 remote_method_look_up(message);
-                // parse_message(message);
                 memset(message, 0, sizeof(message)/sizeof(message[0]));
                 i=0;
                 break;
             }
             message[i++] = u;
         }
-        // delay(1000);
         sleep_mode();
     }
 }
@@ -217,18 +228,8 @@ void setup() {
 void loop() {
 }
 
-/* stateless, remote procedure call */
-void parse_message(char* message) {
-    if (strcmp(message, "get status") == 0) {
-        Serial.print("OK\n");
-        tft.setTextColor(color_8);
-        tft.setTextSize(1);
-        tft.print("[OK]\n");
-    }
-}
-
 void init_system() {
-    rt67_on();                              // this shorts DUT_GND & CONTROLLER_GND, for serial communication only
+    // rt67_on();                              // this shorts DUT_GND & CONTROLLER_GND, for serial communication only
 }
 
 // void touch(Adafruit_TFTLCD &tft, uint16_t x_0, uint16_t x_1, uint16_t y_0, uint16_t y_1, uint32_t timeout=0) {
@@ -262,12 +263,24 @@ void remote_method_look_up(char* func_name) {
 }
 
 int get_status(int dut_id) {
-    Serial.println("inside get_status()");
-    Serial.print("arg = ");
-    Serial.println(dut_id);
+    // Serial.println("inside get_status()");
+    // Serial.print("arg = ");
+    // Serial.println(dut_id);
+    Serial.print("OK\n");
 }
 
 int get_voltage(int dut_id) {
+    /* this is for a function that takes a int as parameter, it works */
+    relay_call(duts[dut_id].J12_1);
+    delay(500);
+    duts[dut_id].v_1 = multimeter_read_voltage();
+    relay_call(duts[dut_id].J4_1);
+    delay(500);
+    duts[dut_id].v_2 = multimeter_read_voltage();
+    Serial.write((byte*)&(duts[dut_id].v_1), 2);
+    Serial.write((byte*)&(duts[dut_id].v_2), 2);
+
+    /* code below is for a function where duts[i] is passed as pointer */
     // relay_call(dut -> J12_1);
     // delay(500);
     // dut -> v_1 = multimeter_read_voltage();
@@ -284,8 +297,16 @@ int get_voltage(int dut_id) {
 
 int get_resistance(int dut_id) {
     //
+    Serial.println("inside get_resistance()");
+    Serial.print("arg = ");
+    Serial.println(dut_id);
 }
 
+int put_display(char* line) {
+    while (Serial.available()) {
+
+    }
+}
 /* pass by reference, its easier to modify variable inside structure */
 // void show_info(struct DUT* dut) {
 //     Serial.println(dut->num);
