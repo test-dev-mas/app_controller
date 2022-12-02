@@ -3,13 +3,14 @@
 #include <Adafruit_TFTLCD.h>
 #include <Fonts/FreeMonoBold9pt7b.h>
 #include <TouchScreen.h>
+#include <SoftwareSerial.h>
 #include <avr/sleep.h>
 #include <avr/wdt.h>
 
 #include "ict_board.h"
 #include "multimeter_click.h"
 
-#define VERSION_NUMBER      "V 1.0"
+#define VERSION_NUMBER      "V 0.1"
 
 /* "after-glow" from https://gogh-co.github.io/Gogh/ */
 #define bg                  0x2104  
@@ -110,6 +111,8 @@ struct DUT_t duts[] = {
     {4, 44, test_points[6], test_points[7], 31, 30, 40, A5, A4, 0, 0}
 };
 
+SoftwareSerial debug_port(11, 10);          // (rx, tx)
+
 void setup() {
     // struct DUT_t duts[] = {
     //     {1, 47, test_points[0], test_points[1], 37, 36, 43, A11, A10, 0, 0},
@@ -123,6 +126,7 @@ void setup() {
     multimeter_init();
 
     Serial.begin(115200);
+    debug_port.begin(9600);
 
     set_sleep_mode(0);
 
@@ -166,13 +170,12 @@ void setup() {
     tft.setTextColor(color_8);
     tft.print("MICROART SERVICES INC 2022");
 
-    touch(tft, 80, 240, 261, 301, 1000000);
+    touch(tft, 80, 240, 261, 301, 0xffffffff);  // this function will return in 1193.046 hours!          
     tft.fillScreen(bg);
     tft.setCursor(0,0);
-    for (auto j=0;j<1000;j++) {
-        tft.print("sudo apt");
-    }
-
+    // for (auto j=0;j<1000;j++) {
+    //     tft.print("sudo apt");
+    // }
 
     // for (auto i=0;i<100;i++) {
     //     RT68_ON
@@ -202,19 +205,13 @@ void setup() {
 
     for (;;) {
         while (Serial.available()) {
-            char u = Serial.read();
-            
-            /*  a naive approach is to pass only function id
-                to look-up
-                and receive parameters inside function
-                this will result a lot of extra code for receiving though\
-                */
+            char u = Serial.read();            
             if (u == '\r') {
                 // Serial.print("message received: ");
-                // Serial.println(message);
+                debug_port.println(message);
                 /* remote procedure call */
                 // might be a good idea to retain parse_message() to decode an entire message frame (func+parameter)
-                remote_method_look_up(message);
+                // remote_method_look_up(message);
                 memset(message, 0, sizeof(message)/sizeof(message[0]));
                 i=0;
                 break;
